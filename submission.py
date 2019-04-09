@@ -58,6 +58,18 @@ def testEssentialMatrix():
     E = essentialMatrix(F, K1, K2)
     print(E)
 
+def testEpipolarCorrespondence():
+    im1 = cv2.imread('../data/im1.png')
+    im2 = cv2.imread('../data/im2.png')
+    pts = np.load('../data/some_corresp.npz')
+    pts1 = pts["pts1"]
+    pts2 = pts["pts2"]
+    M = max((im1.shape[0], im1.shape[1]))
+    F = eightpoint(pts1, pts2, M)
+    from helper import epipolarMatchGUI
+    epipolarMatchGUI(im1, im2, F)
+    np.savez('q4_1.npz', F=F, pts1=pts1, pts2=pts2)
+
 '''
 Q2.1: Eight Point Algorithm
     Input:  pts1, Nx2 Matrix
@@ -213,11 +225,65 @@ Q4.1: 3D visualization of the temple images.
 
 '''
 def epipolarCorrespondence(im1, im2, F, x1, y1):
-    # Replace pass by your implementation
-    pass
+    im1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
+    im2 = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
+
+    patch_size = 10
+    search_radius = 50
+    mask = getMask(patch_size)
+
+    X = np.asarray((x1, y1, 1)).T
+    line = np.dot(F, X)
+
+    window1 = getPatch(im1, patch_size, x1, y1)
+
+    y2s = np.arange(y1-search_radius, y1+search_radius)
+    a = line[0]
+    b = line[1]
+    c = line[2]
+
+    x2s = np.round(-(b*y2s+c)/a).astype(int)
+
+    bestDist = 1e12
+    x2 = None
+    y2 = None
+
+    for i in range(x2s.shape[0]):
+        tempx2 = x2s[i]
+        tempy2 = y2s[i]
+
+        window2 = getPatch(im2, patch_size, tempx2, tempy2) 
+        dist = getDist(window1, window2, mask)
+        if(dist < bestDist):
+            bestDist = dist
+            x2 = tempx2
+            y2 = tempy2
+    return x2, y2
+
+def getDist(patch0, patch1, mask):
+    diff = patch0.flatten() - patch1.flatten()
+    norm = np.linalg.norm(diff * mask.flatten())
+    return norm
+
+def getPatch(im, patch_size, x, y):
+    im = np.pad(im, [(patch_size//2, patch_size//2), (patch_size//2, patch_size//2)], mode='constant')
+    x0 = x
+    x1 = x+patch_size//1+1
+    y0 = y
+    y1 = y+patch_size//1+1
+
+    patch = im[y0:y1, x0:x1]
+    return patch
+
+def getMask(size, sigma=1):
+    from scipy.ndimage import gaussian_filter
+    mask = np.zeros((size+1, size+1))
+    mask[size//2, size//2] = 1
+    return gaussian_filter(mask, sigma=sigma)
 
 if __name__ == "__main__":
     # testEightPoint()
     # testSevenPoint()
     # testEssentialMatrix()
+    # testEpipolarCorrespondence()
     pass
