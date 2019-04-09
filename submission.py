@@ -42,8 +42,21 @@ def testSevenPoint():
     displayEpipolarF(im1, im2, F)
     np.savez('q2_2.npz', F=F, M=M, pts1=pts1, pts2=pts2)
 
-def getDet(alpha, F1, F2):
-    return np.linalg.det(alpha*F1+(1-alpha)*F2)
+def testEssentialMatrix():
+    im1 = cv2.imread('../data/im1.png')
+    pts = np.load('../data/some_corresp.npz')
+    pts1 = pts["pts1"]
+    pts2 = pts["pts2"]
+
+    M = max((im1.shape[0], im1.shape[1]))
+    F = eightpoint(pts1, pts2, M)
+    print(F)
+
+    intrinsics = np.load('../data/intrinsics.npz')
+    K1 = intrinsics['K1']
+    K2 = intrinsics['K2']
+    E = essentialMatrix(F, K1, K2)
+    print(E)
 
 '''
 Q2.1: Eight Point Algorithm
@@ -62,7 +75,6 @@ def eightpoint(pts1, pts2, M):
 
     # Construction A matrix
     A = np.vstack([u*u1, v*u1, u1, u*v1, v*v1, v1, u, v, np.ones(u.shape)])
-
     # Get eigenvector
     _,_,V = np.linalg.svd(A.T)
     F = np.reshape(V[-1, :], (3,3))
@@ -105,7 +117,7 @@ def sevenpoint(pts1, pts2, M):
     # Solve polynomial
     fun = lambda a: np.linalg.det(a * F1 + (1 - a) * F2)
     a0 = fun(0)
-    a1 = 2 * (fun(1) - fun(-1)) / 3. - (fun(2) - fun(-2)) / 12.
+    a1 = 2 * (fun(1) - fun(-1)) / 3 - (fun(2) - fun(-2)) / 12
     a2 = 0.5 * fun(1) + 0.5 * fun(-1) - a0
     a3 = fun(1) - a0 - a1 - a2
     alphas = np.roots(np.array([a3, a2, a1, a0]))    
@@ -120,7 +132,7 @@ def sevenpoint(pts1, pts2, M):
 
         from helper import refineF
         F = refineF(F, pts1, pts2)
-        F = np.dot(np.dot(np.transpose(T), F), T)
+        F = np.dot(np.dot(T.T, F), T)
         Farray.append(F)
 
     return Farray
@@ -133,9 +145,8 @@ Q3.1: Compute the essential matrix E.
     Output: E, the essential matrix
 '''
 def essentialMatrix(F, K1, K2):
-    # Replace pass by your implementation
-    pass
-
+    E = np.dot(np.dot(K2.T, F), K1)
+    return E
 
 '''
 Q3.2: Triangulate a set of 2D coordinates in the image to a set of 3D points.
@@ -147,9 +158,48 @@ Q3.2: Triangulate a set of 2D coordinates in the image to a set of 3D points.
             err, the reprojection error.
 '''
 def triangulate(C1, pts1, C2, pts2):
-    # Replace pass by your implementation
-    pass
+    x1 = pts1[:,0]
+    y1 = pts1[:,1]
+    x2 = pts2[:,0]
+    y2 = pts2[:,1]
 
+    num_pts = x1.shape[0]
+    W = np.zeros((num_pts,4))
+    for i in range(num_pts):
+        c11 = C1[0,:]
+        c12 = C1[1,:]
+        c13 = C1[2,:]
+        c21 = C2[0,:]
+        c22 = C2[1,:]
+        c23 = C2[2,:]
+        xi1 = x1[i]
+        yi1 = y1[i]
+        xi2 = x2[i]
+        yi2 = y2[i]
+
+        A = np.vstack([c11 - c13 * xi1, 
+                       c12 - c13 * yi1,
+                       c21 - c23 * xi2,
+                       c22 - c23 * yi2])
+        _,_,V = np.linalg.svd(A)
+        w = V[-1, :]
+        # Normalize W (Nx3)
+        W[i, :] = w/w[3]
+
+    # Reproject W (Nx3) into W_r (3xN)
+    W_r1 = np.dot(C1, W.T)
+    W_r2 = np.dot(C2, W.T)
+
+    # Normalize the projection
+    W_r1 = (W_r1[:2] / W_r1[2]).T
+    W_r2 = (W_r2[:2] / W_r2[2]).T
+
+    err = 0
+    for i in range(pts1.shape[1]):
+        err += np.linalg.norm(W_r1[i,:]- pts1[i,:]) + np.linalg.norm(W_r2[i,:]- pts2[i,:])
+
+    P = W[:, 0:3]
+    return P, err
 
 '''
 Q4.1: 3D visualization of the temple images.
@@ -168,5 +218,6 @@ def epipolarCorrespondence(im1, im2, F, x1, y1):
 
 if __name__ == "__main__":
     # testEightPoint()
-    testSevenPoint()
+    # testSevenPoint()
+    # testEssentialMatrix()
     pass
